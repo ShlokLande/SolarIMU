@@ -9,10 +9,6 @@
  #ifndef __IMU_H__
  #define __IMU_H__
  
- #ifdef __cplusplus
- extern "C" {
- #endif
- 
  /* IMU I2C Address */
  #define IMU_ADDRESS (0x4B << 1)  // IMU I2C device address (shifted for STM32 HAL) this is or the sparkplug board, 0x4A could also work for the custom one
 
@@ -53,7 +49,4 @@
 
  void imu_app_init(void); //TODO: function to set the set feature cmd for all sensors
  void imu_app_task(void); //TODO: function to send IMU data over CAN
- #ifdef __cplusplus
- }
- #endif
 #endif /* __IMU__APP__H__ */
