@@ -105,7 +105,6 @@ bool imu_read_accel(imu_data_t *data)
     uint16_t offset = IMU_SHTP_HEADER_LEN;
 
     // Reports on channel 3 are often preceded by a 5-byte Base Timestamp
-    // Reference report (ID 0xFB) — skip it if present.
     if (offset < imu_rx_len && imu_rx_buffer[offset] == 0xFB) {
         offset += 5;
     }
@@ -114,6 +113,14 @@ bool imu_read_accel(imu_data_t *data)
         return false;
     }
 
+    /*
+    offset+4: X low byte
+    offset+5: X high byte
+    offset+6: Y low byte
+    offset+7: Y high byte
+    offset+8: Z low byte
+    offset+9: Z high byte
+    */
     int16_t x = (int16_t)(imu_rx_buffer[offset + 5] << 8 | imu_rx_buffer[offset + 4]);
     int16_t y = (int16_t)(imu_rx_buffer[offset + 7] << 8 | imu_rx_buffer[offset + 6]);
     int16_t z = (int16_t)(imu_rx_buffer[offset + 9] << 8 | imu_rx_buffer[offset + 8]);
