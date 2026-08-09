@@ -17,5 +17,6 @@ bool imu_data_ready(void);
 
 void imu_enable_accel(void);              // sends the SH2 Set Feature command for accel
 bool imu_read_accel(imu_data_t *data);    // reads one SHTP packet, fills accel_x/y/z if it's an accel report
-
+void imu_enable_gyro(void);
+bool imu_read_gyro(imu_data_t *data);
 #endif /* __IMU__DRIVER__H__ */
