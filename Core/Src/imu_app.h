@@ -20,7 +20,7 @@
 
  //SH2 report IDs
  #define SH2_REPORT_SET_FEAATURE_CMD    0xFD
- #define SH2_REPORT_ACCEL               0x01
+ #define SH2_REPORT_ACCEL               0x04
  #define SH2_REPORT_GYRO                0x02
  #define SH2_REPORT_MAG                 0x03
 
