@@ -12,9 +12,8 @@ void imu_app_init(void)
 
 void imu_app_task(void)
 {
-    if (imu_read_accel(&imu_data)) {
-        HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);   // toggles once per successful accel report
-    }
+    imu_read_accel(&imu_data);
+    imu_read_gyro(&imu_data);
 
 
 }
