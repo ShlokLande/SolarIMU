@@ -154,41 +154,14 @@ bool imu_read_accel(imu_data_t *data)
     data->accel_x = (float)x / 256.0f;   // Q8 fixed-point -> m/s^2 (BNO08x accel Q-point = 8)
     data->accel_y = (float)y / 256.0f;
     data->accel_z = (float)z / 256.0f;
-    return true;
-}
 
-bool imu_read_gyro(imu_data_t *data)
-{
-    if (!imu_data_ready() || !imu_read_packet()) {
+    if (offset + IMU_ACCEL_PAYLOAD_LEN + IMU_GYRO_PAYLOAD_LEN > imu_rx_len || imu_rx_buffer[offset] != SH2_REPORT_ACCEL) {
         return false;
     }
 
-    if (imu_rx_buffer[2] != SHTP_CHANNEL_REPORTS) {
-        return false;
-    }
-
-    uint16_t offset = IMU_SHTP_HEADER_LEN;
-
-    // Reports on channel 3 are often preceded by a 5-byte Base Timestamp
-    if (offset < imu_rx_len && imu_rx_buffer[offset] == 0xFB) {
-        offset += 5;
-    }
-
-    if (offset + IMU_GYRO_PAYLOAD_LEN > imu_rx_len || imu_rx_buffer[offset] != SH2_REPORT_GYRO) {
-        return false;
-    }
-
-    /*
-    offset+4: X low byte
-    offset+5: X high byte
-    offset+6: Y low byte
-    offset+7: Y high byte
-    offset+8: Z low byte
-    offset+9: Z high byte
-    */
-    int16_t x = (int16_t)(imu_rx_buffer[offset + 5] << 8 | imu_rx_buffer[offset + 4]);
-    int16_t y = (int16_t)(imu_rx_buffer[offset + 7] << 8 | imu_rx_buffer[offset + 6]);
-    int16_t z = (int16_t)(imu_rx_buffer[offset + 9] << 8 | imu_rx_buffer[offset + 8]);
+    int16_t x = (int16_t)(imu_rx_buffer[offset + IMU_ACCEL_PAYLOAD_LEN + 5] << 8 | imu_rx_buffer[offset + IMU_ACCEL_PAYLOAD_LEN + 4]);
+    int16_t y = (int16_t)(imu_rx_buffer[offset + IMU_ACCEL_PAYLOAD_LEN + 7] << 8 | imu_rx_buffer[offset + IMU_ACCEL_PAYLOAD_LEN + 6]);
+    int16_t z = (int16_t)(imu_rx_buffer[offset + IMU_ACCEL_PAYLOAD_LEN + 9] << 8 | imu_rx_buffer[offset + IMU_ACCEL_PAYLOAD_LEN + 8]);
 
     data->gyro_x = (float)x / 512.0f;   // Q9 fixed-point -> rad/s (BNO08x gyro Q-point = 9)
     data->gyro_y = (float)y / 512.0f;
