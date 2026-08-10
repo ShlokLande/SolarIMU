@@ -118,7 +118,7 @@ static bool imu_read_packet(void)
     return HAL_I2C_Master_Receive(&hi2c1, IMU_ADDRESS, imu_rx_buffer, imu_rx_len, HAL_MAX_DELAY) == HAL_OK;
 }
 
-bool imu_read_accel(imu_data_t *data)
+bool imu_read_report(imu_data_t *data)
 {
     if (!imu_data_ready() || !imu_read_packet()) {
         return false;
@@ -129,42 +129,54 @@ bool imu_read_accel(imu_data_t *data)
     }
 
     uint16_t offset = IMU_SHTP_HEADER_LEN;
+    bool updated = false;
 
-    // Reports on channel 3 are often preceded by a 5-byte Base Timestamp
-    if (offset < imu_rx_len && imu_rx_buffer[offset] == 0xFB) {
-        offset += 5;
+    while (offset < imu_rx_len) {
+        uint8_t report_id = imu_rx_buffer[offset];
+
+        switch (report_id) {
+            case 0xFB:  // Base Timestamp Reference — no sensor data, just skip it
+            {
+                offset += 5;
+                break;
+            }
+            case SH2_REPORT_ACCEL:
+            {
+                if (offset + IMU_ACCEL_PAYLOAD_LEN > imu_rx_len) 
+                    return updated;
+                int16_t x = (int16_t)(imu_rx_buffer[offset + 5] << 8 | imu_rx_buffer[offset + 4]);
+                int16_t y = (int16_t)(imu_rx_buffer[offset + 7] << 8 | imu_rx_buffer[offset + 6]);
+                int16_t z = (int16_t)(imu_rx_buffer[offset + 9] << 8 | imu_rx_buffer[offset + 8]);
+
+                data->accel_x = (float)x / 256.0f;   // Q8 fixed-point -> m/s^2 (BNO08x accel Q-point = 8)
+                data->accel_y = (float)y / 256.0f;
+                data->accel_z = (float)z / 256.0f;
+                offset += IMU_ACCEL_PAYLOAD_LEN;
+                updated = true;
+                break;
+            }
+            case SH2_REPORT_GYRO:
+            {
+                if (offset + IMU_GYRO_PAYLOAD_LEN > imu_rx_len) 
+                    return updated;
+                int16_t x = (int16_t)(imu_rx_buffer[offset +  5] << 8 | imu_rx_buffer[offset +  4]);
+                int16_t y = (int16_t)(imu_rx_buffer[offset +  7] << 8 | imu_rx_buffer[offset +  6]);
+                int16_t z = (int16_t)(imu_rx_buffer[offset +  9] << 8 | imu_rx_buffer[offset +  8]);
+            
+                data->gyro_x = (float)x / 512.0f;   // Q9 fixed-point -> rad/s (BNO08x gyro Q-point = 9)
+                data->gyro_y = (float)y / 512.0f;
+                data->gyro_z = (float)z / 512.0f;
+                offset += IMU_GYRO_PAYLOAD_LEN;
+                updated = true;
+                break;
+            }
+
+            default:
+                return updated;
+        }
     }
 
-    if (offset + IMU_ACCEL_PAYLOAD_LEN > imu_rx_len || imu_rx_buffer[offset] != SH2_REPORT_ACCEL) {
-        return false;
-    }
-
-    /*
-    offset+4: X low byte
-    offset+5: X high byte
-    offset+6: Y low byte
-    offset+7: Y high byte
-    offset+8: Z low byte
-    offset+9: Z high byte
-    */
-    int16_t x = (int16_t)(imu_rx_buffer[offset + 5] << 8 | imu_rx_buffer[offset + 4]);
-    int16_t y = (int16_t)(imu_rx_buffer[offset + 7] << 8 | imu_rx_buffer[offset + 6]);
-    int16_t z = (int16_t)(imu_rx_buffer[offset + 9] << 8 | imu_rx_buffer[offset + 8]);
-
-    data->accel_x = (float)x / 256.0f;   // Q8 fixed-point -> m/s^2 (BNO08x accel Q-point = 8)
-    data->accel_y = (float)y / 256.0f;
-    data->accel_z = (float)z / 256.0f;
-
-    if (offset + IMU_ACCEL_PAYLOAD_LEN + IMU_GYRO_PAYLOAD_LEN > imu_rx_len || imu_rx_buffer[offset] != SH2_REPORT_ACCEL) {
-        return false;
-    }
-
-    int16_t x = (int16_t)(imu_rx_buffer[offset + IMU_ACCEL_PAYLOAD_LEN + 5] << 8 | imu_rx_buffer[offset + IMU_ACCEL_PAYLOAD_LEN + 4]);
-    int16_t y = (int16_t)(imu_rx_buffer[offset + IMU_ACCEL_PAYLOAD_LEN + 7] << 8 | imu_rx_buffer[offset + IMU_ACCEL_PAYLOAD_LEN + 6]);
-    int16_t z = (int16_t)(imu_rx_buffer[offset + IMU_ACCEL_PAYLOAD_LEN + 9] << 8 | imu_rx_buffer[offset + IMU_ACCEL_PAYLOAD_LEN + 8]);
-
-    data->gyro_x = (float)x / 512.0f;   // Q9 fixed-point -> rad/s (BNO08x gyro Q-point = 9)
-    data->gyro_y = (float)y / 512.0f;
-    data->gyro_z = (float)z / 512.0f;
-    return true;
+    return updated;
 }
+
+
