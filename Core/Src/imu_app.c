@@ -12,8 +12,5 @@ void imu_app_init(void)
 
 void imu_app_task(void)
 {
-    imu_read_accel(&imu_data);
-    imu_read_gyro(&imu_data);
-
-
+    imu_read_report(&imu_data);
 }
