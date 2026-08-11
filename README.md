@@ -1,0 +1,1 @@
+This repo contains firmware I'm writing for the IMU (Bosch BNO086) on UBC Solar's solar car. It talks to the sensor over I2C using CEVA's SHTP/SH-2 protocol, implemented from scratch. Currently being bench-tested on a Nucleo-F103RB before integration onto the car's telemetry board.
