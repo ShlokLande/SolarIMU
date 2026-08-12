@@ -8,6 +8,7 @@ void imu_app_init(void)
     imu_init();
     imu_enable_accel();
     imu_enable_gyro();
+    imu_enable_mag();
 }
 
 void imu_app_task(void)
