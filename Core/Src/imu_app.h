@@ -44,7 +44,7 @@
  typedef struct {
     float accel_x, accel_y, accel_z;
     float gyro_x, gyro_y, gyro_z;
-    float mag_x, mag_y, Mag_z;
+    float mag_x, mag_y, mag_z;
  } imu_data_t;
 
  void imu_app_init(void); //TODO: function to set the set feature cmd for all sensors
