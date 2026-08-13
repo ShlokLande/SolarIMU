@@ -12,6 +12,7 @@
 static uint8_t imu_control_seq = 0;   // per-channel sequence counter SHTP requires on writes
 #define IMU_ACCEL_PAYLOAD_LEN   10    // reportID, seq, status, delay, X(2), Y(2), Z(2)
 #define IMU_GYRO_PAYLOAD_LEN   10
+#define IMU_MAG_PAYLOAD_LEN   10
 
 static uint8_t imu_rx_buffer[IMU_RX_BUFFER_LEN];
 static uint16_t imu_rx_len;
@@ -102,6 +103,32 @@ void imu_enable_gyro(void)
     HAL_I2C_Master_Transmit(&hi2c1, IMU_ADDRESS, packet, sizeof(packet), HAL_MAX_DELAY);
 }
 
+void imu_enable_mag(void)
+{
+    uint8_t packet[4 + 17];
+
+    // --- SHTP header (channel 2 = control) ---
+    uint16_t total_len = sizeof(packet);
+    packet[0] = total_len & 0xFF;
+    packet[1] = (total_len >> 8) & 0xFF;
+    packet[2] = SHTP_CHANNEL_CONTROL;
+    packet[3] = imu_control_seq++;
+
+    // --- SH2 Set Feature Command payload ---
+    packet[4]  = SH2_REPORT_SET_FEAATURE_CMD;
+    packet[5]  = SH2_REPORT_MAG;
+    packet[6]  = 0x00;                                   // feature flags
+    packet[7]  = 0x00; packet[8]  = 0x00;                // change sensitivity
+    packet[9]  = (IMU_MAG_REPORT_INTERVAL_US)       & 0xFF;
+    packet[10] = (IMU_MAG_REPORT_INTERVAL_US >> 8)  & 0xFF;
+    packet[11] = (IMU_MAG_REPORT_INTERVAL_US >> 16) & 0xFF;
+    packet[12] = (IMU_MAG_REPORT_INTERVAL_US >> 24) & 0xFF;
+    packet[13] = 0x00; packet[14] = 0x00; packet[15] = 0x00; packet[16] = 0x00; // batch interval
+    packet[17] = 0x00; packet[18] = 0x00; packet[19] = 0x00; packet[20] = 0x00; // sensor-specific config
+
+    HAL_I2C_Master_Transmit(&hi2c1, IMU_ADDRESS, packet, sizeof(packet), HAL_MAX_DELAY);
+}
+
 static bool imu_read_packet(void)
 {
     uint8_t header[IMU_SHTP_HEADER_LEN];
@@ -167,6 +194,22 @@ bool imu_read_report(imu_data_t *data)
                 data->gyro_y = (float)y / 512.0f;
                 data->gyro_z = (float)z / 512.0f;
                 offset += IMU_GYRO_PAYLOAD_LEN;
+                updated = true;
+                break;
+            }
+
+            case SH2_REPORT_MAG:
+            {
+                if (offset + IMU_MAG_PAYLOAD_LEN > imu_rx_len)
+                    return updated;
+                int16_t x = (int16_t)(imu_rx_buffer[offset +  5] << 8 | imu_rx_buffer[offset +  4]);
+                int16_t y = (int16_t)(imu_rx_buffer[offset +  7] << 8 | imu_rx_buffer[offset +  6]);
+                int16_t z = (int16_t)(imu_rx_buffer[offset +  9] << 8 | imu_rx_buffer[offset +  8]);
+            
+                data->mag_x = (float)x / 16.0f;   // Q4 fixed-point -> MicroTesla (BNO08x gyro Q-point = 4)
+                data->mag_y = (float)y / 16.0f;
+                data->mag_z = (float)z / 16.0f;
+                offset += IMU_MAG_PAYLOAD_LEN;
                 updated = true;
                 break;
             }
