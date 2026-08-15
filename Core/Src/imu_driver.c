@@ -1,3 +1,8 @@
+/******************************************************************************
+* @file    imu_driver.c
+* @brief   reset/boot handling, SH2 feature-enable commands, and sensor report parsing.
+******************************************************************************/
+
 #include "imu_driver.h"
 
 #include "main.h"
@@ -9,58 +14,76 @@
 #define IMU_SHTP_HEADER_LEN     4
 #define IMU_SHTP_LENGTH_MASK    0x7FFF
 #define IMU_RX_BUFFER_LEN       128
-static uint8_t imu_control_seq = 0;   // per-channel sequence counter SHTP requires on writes
-#define IMU_ACCEL_PAYLOAD_LEN   10    // reportID, seq, status, delay, X(2), Y(2), Z(2)
+#define IMU_ACCEL_PAYLOAD_LEN   10    
 #define IMU_GYRO_PAYLOAD_LEN   10
 #define IMU_MAG_PAYLOAD_LEN   10
 
-static uint8_t imu_rx_buffer[IMU_RX_BUFFER_LEN];
-static uint16_t imu_rx_len;
+static uint8_t g_IMU_DRIVER_control_seq = 0;   // per-channel sequence counter SHTP requires on writes
+static uint8_t g_IMU_DRIVER_rx_buffer[IMU_RX_BUFFER_LEN];
+static uint16_t g_IMU_DRIVER_rx_len;
 
-bool imu_data_ready(void)
+/**
+ * @brief Read the I_INTN pin; the BNO086 drives it low when an SHTP packet is ready.
+ *
+ * @return true if a packet is waiting to be read, false otherwise
+ */
+bool ImuDriverDataReady(void)
 {
     return HAL_GPIO_ReadPin(I_INTN_GPIO_Port, I_INTN_Pin) == GPIO_PIN_RESET;
 }
 
-void imu_init(void)
+/**
+ * @brief Reset the BNO086 and read its power-on SHTP advertisement packet.
+ *
+ * @return None
+ */
+void ImuDriverInit(void)
 {
+    uint32_t start;
+    uint8_t header[IMU_SHTP_HEADER_LEN];
+    uint16_t packet_len;
+
     HAL_GPIO_WritePin(I_BOOTN_GPIO_Port, I_BOOTN_Pin, GPIO_PIN_SET);
 
     HAL_GPIO_WritePin(I_NRST_GPIO_Port, I_NRST_Pin, GPIO_PIN_RESET);
     HAL_Delay(IMU_RESET_PULSE_MS);
     HAL_GPIO_WritePin(I_NRST_GPIO_Port, I_NRST_Pin, GPIO_PIN_SET);
 
-    uint32_t start = HAL_GetTick();
-    while (!imu_data_ready()) {
+    start = HAL_GetTick();
+    while (!ImuDriverDataReady()) {
         if ((HAL_GetTick() - start) > IMU_BOOT_WAIT_MS) {
             return;
         }
     }
 
-    uint8_t header[IMU_SHTP_HEADER_LEN];
     if (HAL_I2C_Master_Receive(&hi2c1, IMU_ADDRESS, header, IMU_SHTP_HEADER_LEN, HAL_MAX_DELAY) != HAL_OK) {
         return;
     }
 
-    uint16_t packet_len = ((header[1] << 8) | header[0]) & IMU_SHTP_LENGTH_MASK;
+    packet_len = ((header[1] << 8) | header[0]) & IMU_SHTP_LENGTH_MASK;
     if (packet_len == 0) {
         return;
     }
 
-    imu_rx_len = (packet_len > IMU_RX_BUFFER_LEN) ? IMU_RX_BUFFER_LEN : packet_len;
-    HAL_I2C_Master_Receive(&hi2c1, IMU_ADDRESS, imu_rx_buffer, imu_rx_len, HAL_MAX_DELAY);
+    g_IMU_DRIVER_rx_len = (packet_len > IMU_RX_BUFFER_LEN) ? IMU_RX_BUFFER_LEN : packet_len;
+    HAL_I2C_Master_Receive(&hi2c1, IMU_ADDRESS, g_IMU_DRIVER_rx_buffer, g_IMU_DRIVER_rx_len, HAL_MAX_DELAY);
 }
 
-void imu_enable_accel(void)
+/**
+ * @brief Send the SH2 Set Feature command to enable accelerometer reports.
+ *
+ * @return None
+ */
+void ImuDriverEnableAccel(void)
 {
     uint8_t packet[4 + 17];
+    uint16_t total_len = sizeof(packet);
 
     // --- SHTP header (channel 2 = control) ---
-    uint16_t total_len = sizeof(packet);
     packet[0] = total_len & 0xFF;
     packet[1] = (total_len >> 8) & 0xFF;
     packet[2] = SHTP_CHANNEL_CONTROL;
-    packet[3] = imu_control_seq++;
+    packet[3] = g_IMU_DRIVER_control_seq++;
 
     // --- SH2 Set Feature Command payload ---
     packet[4]  = SH2_REPORT_SET_FEAATURE_CMD;
@@ -77,16 +100,21 @@ void imu_enable_accel(void)
     HAL_I2C_Master_Transmit(&hi2c1, IMU_ADDRESS, packet, sizeof(packet), HAL_MAX_DELAY);
 }
 
-void imu_enable_gyro(void)
+/**
+ * @brief Send the SH2 Set Feature command to enable gyroscope reports.
+ *
+ * @return None
+ */
+void ImuDriverEnableGyro(void)
 {
     uint8_t packet[4 + 17];
+    uint16_t total_len = sizeof(packet);
 
     // --- SHTP header (channel 2 = control) ---
-    uint16_t total_len = sizeof(packet);
     packet[0] = total_len & 0xFF;
     packet[1] = (total_len >> 8) & 0xFF;
     packet[2] = SHTP_CHANNEL_CONTROL;
-    packet[3] = imu_control_seq++;
+    packet[3] = g_IMU_DRIVER_control_seq++;
 
     // --- SH2 Set Feature Command payload ---
     packet[4]  = SH2_REPORT_SET_FEAATURE_CMD;
@@ -103,16 +131,21 @@ void imu_enable_gyro(void)
     HAL_I2C_Master_Transmit(&hi2c1, IMU_ADDRESS, packet, sizeof(packet), HAL_MAX_DELAY);
 }
 
-void imu_enable_mag(void)
+/**
+ * @brief Send the SH2 Set Feature command to enable magnetometer reports.
+ *
+ * @return None
+ */
+void ImuDriverEnableMag(void)
 {
     uint8_t packet[4 + 17];
+    uint16_t total_len = sizeof(packet);
 
     // --- SHTP header (channel 2 = control) ---
-    uint16_t total_len = sizeof(packet);
     packet[0] = total_len & 0xFF;
     packet[1] = (total_len >> 8) & 0xFF;
     packet[2] = SHTP_CHANNEL_CONTROL;
-    packet[3] = imu_control_seq++;
+    packet[3] = g_IMU_DRIVER_control_seq++;
 
     // --- SH2 Set Feature Command payload ---
     packet[4]  = SH2_REPORT_SET_FEAATURE_CMD;
@@ -129,37 +162,62 @@ void imu_enable_mag(void)
     HAL_I2C_Master_Transmit(&hi2c1, IMU_ADDRESS, packet, sizeof(packet), HAL_MAX_DELAY);
 }
 
-static bool imu_read_packet(void)
+/**
+ * @brief Read one pending SHTP packet off the I2C bus into the driver's RX buffer.
+ *
+ * Peeks the 4-byte SHTP header to determine the packet length, then re-reads
+ * the full packet.
+ *
+ * @return true if a full packet was read successfully, false otherwise
+ */
+static bool ImuDriverReadPacket(void)
 {
     uint8_t header[IMU_SHTP_HEADER_LEN];
+    uint16_t packet_len;
+
     if (HAL_I2C_Master_Receive(&hi2c1, IMU_ADDRESS, header, IMU_SHTP_HEADER_LEN, HAL_MAX_DELAY) != HAL_OK) {
         return false;
     }
 
-    uint16_t packet_len = ((header[1] << 8) | header[0]) & IMU_SHTP_LENGTH_MASK;
+    packet_len = ((header[1] << 8) | header[0]) & IMU_SHTP_LENGTH_MASK;
     if (packet_len == 0) {
         return false;
     }
 
-    imu_rx_len = (packet_len > IMU_RX_BUFFER_LEN) ? IMU_RX_BUFFER_LEN : packet_len;
-    return HAL_I2C_Master_Receive(&hi2c1, IMU_ADDRESS, imu_rx_buffer, imu_rx_len, HAL_MAX_DELAY) == HAL_OK;
+    g_IMU_DRIVER_rx_len = (packet_len > IMU_RX_BUFFER_LEN) ? IMU_RX_BUFFER_LEN : packet_len;
+    return HAL_I2C_Master_Receive(&hi2c1, IMU_ADDRESS, g_IMU_DRIVER_rx_buffer, g_IMU_DRIVER_rx_len, HAL_MAX_DELAY) == HAL_OK;
 }
 
-bool imu_read_report(imu_data_t *data)
+/**
+ * @brief Read one pending SHTP packet and parse every sensor report inside it.
+ *
+ * Reads the packet report-by-report, updating whichever fields in data
+ * match a recognized report ID (accel, gyro, mag). Stops at the first
+ * unrecognized report ID, since its length cannot be determined.
+ *
+ * @param data ImuAppData struct to update with any parsed sensor readings
+ * @return true if at least one field in data was updated, false otherwise
+ */
+bool ImuDriverReadReport(ImuAppData *data)
 {
-    if (!imu_data_ready() || !imu_read_packet()) {
+    uint16_t offset;
+    uint8_t report_id;
+    bool updated;
+    int16_t x, y, z;
+
+    if (!ImuDriverDataReady() || !ImuDriverReadPacket()) {
         return false;
     }
 
-    if (imu_rx_buffer[2] != SHTP_CHANNEL_REPORTS) {
+    if (g_IMU_DRIVER_rx_buffer[2] != SHTP_CHANNEL_REPORTS) {
         return false;
     }
 
-    uint16_t offset = IMU_SHTP_HEADER_LEN;
-    bool updated = false;
+    offset = IMU_SHTP_HEADER_LEN;
+    updated = false;
 
-    while (offset < imu_rx_len) {
-        uint8_t report_id = imu_rx_buffer[offset];
+    while (offset < g_IMU_DRIVER_rx_len) {
+        report_id = g_IMU_DRIVER_rx_buffer[offset];
 
         switch (report_id) {
             case 0xFB:  // Base Timestamp Reference — no sensor data, just skip it
@@ -169,11 +227,11 @@ bool imu_read_report(imu_data_t *data)
             }
             case SH2_REPORT_ACCEL:
             {
-                if (offset + IMU_ACCEL_PAYLOAD_LEN > imu_rx_len) 
+                if (offset + IMU_ACCEL_PAYLOAD_LEN > g_IMU_DRIVER_rx_len)
                     return updated;
-                int16_t x = (int16_t)(imu_rx_buffer[offset + 5] << 8 | imu_rx_buffer[offset + 4]);
-                int16_t y = (int16_t)(imu_rx_buffer[offset + 7] << 8 | imu_rx_buffer[offset + 6]);
-                int16_t z = (int16_t)(imu_rx_buffer[offset + 9] << 8 | imu_rx_buffer[offset + 8]);
+                x = (int16_t)(g_IMU_DRIVER_rx_buffer[offset + 5] << 8 | g_IMU_DRIVER_rx_buffer[offset + 4]);
+                y = (int16_t)(g_IMU_DRIVER_rx_buffer[offset + 7] << 8 | g_IMU_DRIVER_rx_buffer[offset + 6]);
+                z = (int16_t)(g_IMU_DRIVER_rx_buffer[offset + 9] << 8 | g_IMU_DRIVER_rx_buffer[offset + 8]);
 
                 data->accel_x = (float)x / 256.0f;   // Q8 fixed-point -> m/s^2 (BNO08x accel Q-point = 8)
                 data->accel_y = (float)y / 256.0f;
@@ -184,12 +242,12 @@ bool imu_read_report(imu_data_t *data)
             }
             case SH2_REPORT_GYRO:
             {
-                if (offset + IMU_GYRO_PAYLOAD_LEN > imu_rx_len) 
+                if (offset + IMU_GYRO_PAYLOAD_LEN > g_IMU_DRIVER_rx_len)
                     return updated;
-                int16_t x = (int16_t)(imu_rx_buffer[offset +  5] << 8 | imu_rx_buffer[offset +  4]);
-                int16_t y = (int16_t)(imu_rx_buffer[offset +  7] << 8 | imu_rx_buffer[offset +  6]);
-                int16_t z = (int16_t)(imu_rx_buffer[offset +  9] << 8 | imu_rx_buffer[offset +  8]);
-            
+                x = (int16_t)(g_IMU_DRIVER_rx_buffer[offset +  5] << 8 | g_IMU_DRIVER_rx_buffer[offset +  4]);
+                y = (int16_t)(g_IMU_DRIVER_rx_buffer[offset +  7] << 8 | g_IMU_DRIVER_rx_buffer[offset +  6]);
+                z = (int16_t)(g_IMU_DRIVER_rx_buffer[offset +  9] << 8 | g_IMU_DRIVER_rx_buffer[offset +  8]);
+
                 data->gyro_x = (float)x / 512.0f;   // Q9 fixed-point -> rad/s (BNO08x gyro Q-point = 9)
                 data->gyro_y = (float)y / 512.0f;
                 data->gyro_z = (float)z / 512.0f;
@@ -200,12 +258,12 @@ bool imu_read_report(imu_data_t *data)
 
             case SH2_REPORT_MAG:
             {
-                if (offset + IMU_MAG_PAYLOAD_LEN > imu_rx_len)
+                if (offset + IMU_MAG_PAYLOAD_LEN > g_IMU_DRIVER_rx_len)
                     return updated;
-                int16_t x = (int16_t)(imu_rx_buffer[offset +  5] << 8 | imu_rx_buffer[offset +  4]);
-                int16_t y = (int16_t)(imu_rx_buffer[offset +  7] << 8 | imu_rx_buffer[offset +  6]);
-                int16_t z = (int16_t)(imu_rx_buffer[offset +  9] << 8 | imu_rx_buffer[offset +  8]);
-            
+                x = (int16_t)(g_IMU_DRIVER_rx_buffer[offset +  5] << 8 | g_IMU_DRIVER_rx_buffer[offset +  4]);
+                y = (int16_t)(g_IMU_DRIVER_rx_buffer[offset +  7] << 8 | g_IMU_DRIVER_rx_buffer[offset +  6]);
+                z = (int16_t)(g_IMU_DRIVER_rx_buffer[offset +  9] << 8 | g_IMU_DRIVER_rx_buffer[offset +  8]);
+
                 data->mag_x = (float)x / 16.0f;   // Q4 fixed-point -> MicroTesla (BNO08x gyro Q-point = 4)
                 data->mag_y = (float)y / 16.0f;
                 data->mag_z = (float)z / 16.0f;
@@ -221,5 +279,3 @@ bool imu_read_report(imu_data_t *data)
 
     return updated;
 }
-
-

@@ -1,14 +1,11 @@
-/**
- *  @file imu.h
- *  @brief Header file for IMU communication.
- *
- *  This file contains macros for IMU register addresses and function declarations
- *  for interfacing with the IMU.
- */
+/******************************************************************************
+* @file    imu_app.h
+* @brief   Shared types, macros, and public interface for the IMU application layer.
+******************************************************************************/
 
  #ifndef __IMU_H__
  #define __IMU_H__
- 
+
  /* IMU I2C Address */
  #define IMU_ADDRESS (0x4B << 1)  // IMU I2C device address (shifted for STM32 HAL) this is or the sparkplug board, 0x4A could also work for the custom one
 
@@ -29,24 +26,36 @@
  #define IMU_GYRO_REPORT_INTERVAL_US    10000
  #define IMU_MAG_REPORT_INTERVAL_US     10000
 
- //FreeeRTOS 
+ //FreeeRTOS
  #define IMU_TASK_DELAY      100
  #define IMU_TASK_DELAY_SINGLE      25
  #define IMU_TASK_OFFSET_DELAY       33
- 
- 
+
+
  /* Define the CAN message IDs for each IMU axes */
  #define IMU_AGM_X_CAN_MESSAGE_ID 0x752
  #define IMU_AGM_Y_CAN_MESSAGE_ID 0x753
  #define IMU_AGM_Z_CAN_MESSAGE_ID 0x754
- 
+
  //Bucket to store IMU data before being transmitted over CAN
  typedef struct {
     float accel_x, accel_y, accel_z;
     float gyro_x, gyro_y, gyro_z;
     float mag_x, mag_y, mag_z;
- } imu_data_t;
+ } ImuAppData;
 
- void imu_app_init(void); //TODO: function to set the set feature cmd for all sensors
- void imu_app_task(void); //TODO: function to send IMU data over CAN
+/**
+ * @brief Initialize the IMU driver and enable accelerometer, gyroscope, and magnetometer.
+ *
+ * @return None
+ */
+void ImuAppInit(void);
+
+/**
+ * @brief Poll for and process one pending IMU report, updating the shared IMU data.
+ *
+ * @return None
+ */
+void ImuAppTask(void);
+
 #endif /* __IMU__APP__H__ */
