@@ -33,9 +33,12 @@
 
 
  /* Define the CAN message IDs for each IMU axes */
- #define IMU_AGM_X_CAN_MESSAGE_ID 0x752
- #define IMU_AGM_Y_CAN_MESSAGE_ID 0x753
- #define IMU_AGM_Z_CAN_MESSAGE_ID 0x754
+ #define IMU_AG_X_CAN_MESSAGE_ID 0x752
+ #define IMU_AG_Y_CAN_MESSAGE_ID 0x753
+ #define IMU_AG_Z_CAN_MESSAGE_ID 0x754
+ #define IMU_M_X_CAN_MESSAGE_ID 0x755
+ #define IMU_M_Y_CAN_MESSAGE_ID 0x756
+ #define IMU_M_Z_CAN_MESSAGE_ID 0x757
 
  //Bucket to store IMU data before being transmitted over CAN
  typedef struct {
