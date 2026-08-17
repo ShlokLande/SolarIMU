@@ -18,7 +18,8 @@
 #define IMU_GYRO_PAYLOAD_LEN   10
 #define IMU_MAG_PAYLOAD_LEN   10
 
-#define IMU_CAN_MESSAGE_LENGTH 8
+#define IMU_CAN_MESSAGE_AG_LENGTH 8
+#define IMU_CAN_MESSAGE_M_LENGTH 4
 
 
 static uint8_t g_IMU_DRIVER_control_seq = 0;   // per-channel sequence counter SHTP requires on writes
@@ -289,7 +290,7 @@ static CAN_TxHeaderTypeDef imu_ag_x = {
     .ExtId = 0x0000,
     .IDE   = CAN_ID_STD,
     .RTR   = CAN_RTR_DATA,
-    .DLC   = IMU_CAN_MESSAGE_LENGTH
+    .DLC   = IMU_CAN_MESSAGE_AG_LENGTH
 };
 
 static CAN_TxHeaderTypeDef imu_ag_y = {
@@ -297,7 +298,7 @@ static CAN_TxHeaderTypeDef imu_ag_y = {
     .ExtId = 0x0000,
     .IDE   = CAN_ID_STD,
     .RTR   = CAN_RTR_DATA,
-    .DLC   = IMU_CAN_MESSAGE_LENGTH
+    .DLC   = IMU_CAN_MESSAGE_AG_LENGTH
 };
 
 static CAN_TxHeaderTypeDef imu_ag_z = {
@@ -305,30 +306,30 @@ static CAN_TxHeaderTypeDef imu_ag_z = {
     .ExtId = 0x0000,
     .IDE   = CAN_ID_STD,
     .RTR   = CAN_RTR_DATA,
-    .DLC   = IMU_CAN_MESSAGE_LENGTH
+    .DLC   = IMU_CAN_MESSAGE_AG_LENGTH
 };
 static CAN_TxHeaderTypeDef imu_m_x = {
-    .StdId = IMU_AG_X_CAN_MESSAGE_ID,
+    .StdId = IMU_M_X_CAN_MESSAGE_ID,
     .ExtId = 0x0000,
     .IDE   = CAN_ID_STD,
     .RTR   = CAN_RTR_DATA,
-    .DLC   = IMU_CAN_MESSAGE_LENGTH
+    .DLC   = IMU_CAN_MESSAGE_M_LENGTH
 };
 
 static CAN_TxHeaderTypeDef imu_m_y = {
-    .StdId = IMU_AG_Y_CAN_MESSAGE_ID,
+    .StdId = IMU_M_Y_CAN_MESSAGE_ID,
     .ExtId = 0x0000,
     .IDE   = CAN_ID_STD,
     .RTR   = CAN_RTR_DATA,
-    .DLC   = IMU_CAN_MESSAGE_LENGTH
+    .DLC   = IMU_CAN_MESSAGE_M_LENGTH
 };
 
 static CAN_TxHeaderTypeDef imu_m_z = {
-    .StdId = IMU_AG_Z_CAN_MESSAGE_ID,
+    .StdId = IMU_M_Z_CAN_MESSAGE_ID,
     .ExtId = 0x0000,
     .IDE   = CAN_ID_STD,
     .RTR   = CAN_RTR_DATA,
-    .DLC   = IMU_CAN_MESSAGE_LENGTH
+    .DLC   = IMU_CAN_MESSAGE_M_LENGTH
 };
 
 
@@ -417,3 +418,50 @@ void CAN_tx_ag_z_msg(float accel_z, float gyro_z)
     osDelay(2);
 }
 
+void CAN_tx_m_x_msg(float mag_x)
+{
+    FloatToBytes float_bytes_x;
+    float_bytes_x.f = mag_x;
+    CAN_comms_Tx_msg_t msg = { .header = imu_m_x };
+
+    for (int i = 0; i < 4; i++)
+    {
+        msg.data[i] = float_bytes_x.bytes[i];
+    }
+    CAN_comms_Add_Tx_message(&msg);
+    osDelay(2);
+    RADIO_filter_and_queue_msg_tx(&msg);
+    osDelay(2);
+}
+
+void CAN_tx_m_y_msg(float mag_y)
+{
+    FloatToBytes float_bytes_y;
+    float_bytes_y.f = mag_y;
+    CAN_comms_Tx_msg_t msg = { .header = imu_m_y };
+
+    for (int i = 0; i < 4; i++)
+    {
+        msg.data[i] = float_bytes_y.bytes[i];
+    }
+    CAN_comms_Add_Tx_message(&msg);
+    osDelay(2);
+    RADIO_filter_and_queue_msg_tx(&msg);
+    osDelay(2);
+}
+
+void CAN_tx_m_z_msg(float mag_z)
+{
+    FloatToBytes float_bytes_z;
+    float_bytes_z.f = mag_z;
+    CAN_comms_Tx_msg_t msg = { .header = imu_m_z };
+
+    for (int i = 0; i < 4; i++)
+    {
+        msg.data[i] = float_bytes_z.bytes[i];
+    }
+    CAN_comms_Add_Tx_message(&msg);
+    osDelay(2);
+    RADIO_filter_and_queue_msg_tx(&msg);
+    osDelay(2);
+}
